@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 import os
-from matplotlib.pyplot import table
 import telebot
 from telebot import types
 from database import *
