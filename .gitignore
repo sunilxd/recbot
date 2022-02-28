@@ -1,0 +1,10 @@
+# credential
+.env
+token.json
+
+# Unwanted
+__pycache__
+reference.py
+
+# jupyter notebooks
+*.ipynb

@@ -1,0 +1,27 @@
+General
+
+
+Student
+join - enroll yourself (only for AIML)
+timetable - for today timetable
+leave - tell your teacher your are going to be absent today
+
+Teacher
+mark - send marks of the students
+leave - get list of students who are absent
+
+Others
+cancel - cancel the operation
+help - to know about the commands
+
+cmnds:
+join - enroll yourself (only for AIML)
+timetable - for today timetable
+leave - leave details
+mark - send marks of the students
+cancel - cancel the operation
+help - to know about the commands
+
+join_pin
+join_roll
+join_name
