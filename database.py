@@ -33,13 +33,13 @@ def get_data(sheet_name, rang):
 def data_to_dic():
     i = int(get_data('Data', 'f1')[0][0])
     if i>1:
-        data = get_data('Data', f'a2:c{i}')
+        data = get_data('Data', f'a2:e{i}')
     else:
         return {}
-    return {chat:{'name':name, 'roll':roll} for chat, roll, name in data}
+    return {chat:{'name':name, 'roll':roll, 'role': True if role=='Teacher' else False, 'leave':atten} for chat, roll, name, role, atten in data}
 
 def dic_to_data(dic):
     sorted_key = list(dic.keys())
-    sorted_key.sort(key= lambda x:int(dic[x]['roll']))
-    data = [[ele, dic[ele]['roll'], dic[ele]['name']] for ele in sorted_key]
+    sorted_key.sort(key= lambda x:dic[x]['roll'])
+    data = [[ele, dic[ele]['roll'], dic[ele]['name'], 'Teacher' if dic[ele]['role'] else 'Student', dic[ele]['leave']] for ele in sorted_key]
     update_data_to(data, 'Data', 'a2')

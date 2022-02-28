@@ -22,6 +22,11 @@ mark - send marks of the students
 cancel - cancel the operation
 help - to know about the commands
 
+
+#tags
 join_pin
 join_roll
 join_name
+
+mark_column
+mark_text
