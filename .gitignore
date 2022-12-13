@@ -1,6 +1,11 @@
 # credential
 .env
-token.json
+
+
+# Unified portal secrets
+Sta.pkl
+Stu.pkl
+unified.py
 
 # Unwanted
 __pycache__
@@ -8,3 +13,7 @@ reference.py
 
 # jupyter notebooks
 *.ipynb
+
+
+# log file
+log.txt
