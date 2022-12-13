@@ -159,7 +159,7 @@ def cancel(update: Update, context: CallbackContext) -> int:
 
 def main() -> None:
     """Run the bot"""
-    updater = Updater("5939179125:AAHpp_kujpnUnMv8hmzjs2BtE-rT7Rm-oeM")
+    updater = Updater("")
 
 
     # Get the dispatcher to register handlers
