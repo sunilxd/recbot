@@ -2,6 +2,7 @@ import logging
 import os
 import pickle
 from unified import *
+from keep_alive import keep_alive
 
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, ParseMode
@@ -260,6 +261,10 @@ def main() -> None:
     if token == None:
         token = pickle.load(open('token.pkl', 'rb'))
 
+
+    ## running the flask to keep the repl running
+    flask_thread = keep_alive()
+    
     updater = Updater(token)
 
 
