@@ -1,6 +1,6 @@
 # credential
 .env
-
+token.pkl
 
 # Unified portal secrets
 Sta.pkl
@@ -16,4 +16,4 @@ reference.py
 
 
 # log file
-log.txt
+*.log
