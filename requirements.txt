@@ -1,2 +1,2 @@
-python-telegram-bot=='20.3'
-dotenv
+python-telegram-bot==20.3
+python-dotenv
