@@ -3,6 +3,7 @@ import os
 import pickle
 from unified import *
 from dotenv import load_dotenv
+from keep_alive import keep_alive
 
 load_dotenv()
 
@@ -192,9 +193,7 @@ async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if response == "[]":
             response = "Result not yet realeased"
 
-        await update.message.reply_text(
-            response
-        )
+        await update.message.reply_text(f"```{response}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
 
         return ConversationHandler.END
 
@@ -330,4 +329,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    keep_alive()
     main()
