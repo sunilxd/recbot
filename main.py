@@ -20,8 +20,7 @@ from telegram.ext import (
 with open("stu_data.pkl", "rb") as f:
     student_record = pickle.load(f)
 
-TEST = True
-LOCAL = True
+TEST = False
 
 
 # Enable logging
@@ -33,58 +32,22 @@ logger = logging.getLogger(__name__)
 
 FEEDBACK, ROLLNO, SEM, EXAM = range(4)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """async default message"""
 
     await update.message.reply_text(
         "Hi! I am REC bot\n"
         "I know unified portal is a crap\n"
         "I can fetch your marks in seconds\n\n"
-        "/mymark - to get your mark\n"
-        "/othersmark - to get others mark\n"
-        "/change - to change your rollno\n"
+        "/marks - fetch internal mark\n"
+        "/grades - fetch semester grades\n"
+        "/attendance - fetch attendance\n"
+        "/result - fetch recent result\n\n"
         "/feedback - like to change me? give a feedback\n"
         "/about - about this project"
     )
 
     return None
-
-async def mymark(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ask about the roll number"""
-    context.user_data["own"] = True
-
-    if "roll" in context.user_data:
-        return get_rollno(update, context)
-
-    await update.message.reply_text(
-        "Roll number please\n"
-    )
-
-    return ROLLNO
-
-
-async def othersmark(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ask about the roll number"""
-    context.user_data["own"] = False
-
-    await update.message.reply_text(
-        "Roll number please\n"
-    )
-
-    return ROLLNO
-
-async def changeroll(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Change the async default roll number"""
-    context.user_data["own"] = True
-
-    if "roll" in context.user_data:
-        del context.user_data["roll"]
-
-    await update.message.reply_text(
-        "Roll number please\n"
-    )
-
-    return ROLLNO
 
 
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -103,7 +66,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
 
-async def feedbackstart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def feedback_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """ask for a feedback"""
     await update.message.reply_text(
         "Leave your feedback as a message"
@@ -118,7 +81,7 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # send feedback to sunil 1156186009
     msg = f"{update.message.from_user.id} - {update.message.from_user.full_name}\nfeedback\n{msg}"
-    context.bot.send_message(text=msg, chat_id=1156186009)
+    await context.bot.send_message(text=msg, chat_id=1156186009)
 
 
 
@@ -132,17 +95,62 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     return ConversationHandler.END
 
-async def get_rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ask about the roll number"""
+    context.user_data["entry"] = update.message.text
+
+    msg = "Roll number please"
+
+    if "roll_no" in context.user_data:
+
+        reply_keyboard = [[roll_no] for roll_no in context.user_data["roll_no"]]
+        reply_keyboard.append(['new'])
+
+
+        await update.message.reply_text(
+            msg,
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True
+            ),
+        )
+
+    else:
+        await update.message.reply_text(
+            msg
+        )
+
+    return ROLLNO
+
+
+def get_response(id, email, entry):
+
+    if entry == "/marks":
+        return get_internal_filter(id)
+    
+    elif entry == "/grades":
+        return get_grades_filter(id)
+    
+    elif entry == "/attendance":
+        return get_attendance_filter(email)
+    
+    else:
+        return str(get_result(email))
+
+
+async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """"Get the roll number and check if the roll number is valid then ask about semester"""
+
+    roll_no = update.message.text
+
+    if roll_no == 'new':
+        await update.message.reply_text(
+            "yeah sure\nNew roll number please"
+        )
+
+        return ROLLNO
 
     userid = update.message.from_user.id
     user = update.message.from_user.full_name
-
-    if context.user_data["own"] and ("roll" in context.user_data):
-        roll_no = context.user_data["roll"]
-
-    else:
-        roll_no = update.message.text
 
     sry_message = "I never seen that rollno in unified portal"
 
@@ -152,31 +160,48 @@ async def get_rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         return ConversationHandler.END
 
-    user_id, user_name = student_record[roll_no]
-
-    if context.user_data["own"]:
-        context.user_data["roll"] = roll_no
-
+    user_id, user_name, email = student_record[roll_no]
+    entry = context.user_data["entry"]
     
     logger.info(f"{userid}({user}) : {roll_no}({user_name})")
-    print(f"{userid}({user}) : {roll_no}({user_name})")
 
     try:
-        marks = get_internal_filter(user_id)
+        response = get_response(user_id, email, entry)
 
     except Exception as e:
         logger.error(e)
 
         await update.message.reply_text(
             "Hmmmm.... rajalakshmi.in is down\n\n"
-            "Try after sometime")
+            "Try after sometime"
+        )
+
+        return ConversationHandler.END
+    
+    # if first roll_no
+    if "roll_no" not in context.user_data:
+        context.user_data["roll_no"] = set([roll_no])
+
+    # not first
+    else:
+        context.user_data["roll_no"].add(roll_no)
+
+
+    if entry == "/attendance" or entry == "/result":
+
+        if response == "[]":
+            response = "Result not yet realeased"
+
+        await update.message.reply_text(
+            response
+        )
 
         return ConversationHandler.END
 
 
-    context.user_data["marks"] = marks
+    context.user_data["marks"] = response
 
-    reply_keyboard = [[semester] for semester in sorted(marks)]
+    reply_keyboard = [[semester] for semester in sorted(response)]
 
     await update.message.reply_text(
         f"Got you {user_name}\n"
@@ -189,7 +214,16 @@ async def get_rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return SEM
 
 
-async def get_semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def beautify_marks(marks, start_msg=""):
+    table = f"\n{start_msg}\n"
+
+    for mark in marks:
+        table += "{mark}: {total}\n".format(mark = mark["subject"], total = mark["total"])
+
+    return table
+
+
+async def semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Get the semester check if it is valid then ask about Exam"""
 
     exam = update.message.text
@@ -204,7 +238,15 @@ async def get_semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     context.user_data["marks"] = marks = context.user_data["marks"][exam]
 
+    if context.user_data["entry"] == "/grades":
+        table = beautify_marks(marks)
+        await update.message.reply_text(f"```{table}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
+
+        return ConversationHandler.END
+
+
     reply_keyboard = [[exam] for exam in sorted(marks)]
+    reply_keyboard.append(['All'])
 
     await update.message.reply_text(
         "What marks do you want?",
@@ -216,18 +258,17 @@ async def get_semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return EXAM
 
 
-def beautify_marks(marks):
-    table = "\n"
-
-    for mark in marks:
-        table += "{mark}: {total}\n".format(mark = mark["subject"], total = mark["total"])
-
-    return table
-
-async def get_exam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def exam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Get the exam; if valid show the marks"""
 
     exam = update.message.text
+    marks = context.user_data["marks"]
+
+    if exam == "All":
+        table = "\n".join([beautify_marks(marks[name], name) for name in sorted(marks)])
+        await update.message.reply_text(f"```{table}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
+
+        return ConversationHandler.END
 
     if exam not in context.user_data["marks"]:
         await update.message.reply_text(
@@ -236,7 +277,7 @@ async def get_exam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         return ConversationHandler.END
 
-    marks = context.user_data["marks"][exam]
+    marks = marks[exam]
 
     table = beautify_marks(marks)
 
@@ -263,18 +304,19 @@ def main() -> None:
     # conversation handler
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler("mymark", mymark),
-            CommandHandler("othersmark", othersmark),
-            CommandHandler("change", changeroll),
-            CommandHandler("feedback", feedbackstart),
+            CommandHandler("marks", start),
+            CommandHandler("grades", start),
+            CommandHandler("attendance", start),
+            CommandHandler("result", start),
+            CommandHandler("feedback", feedback_start),
             CommandHandler("about", about),
-            MessageHandler(filters.TEXT, start),
+            MessageHandler(filters.TEXT, helper),
         ],
         states={
             FEEDBACK: [MessageHandler(filters.TEXT, feedback)],
-            ROLLNO: [MessageHandler(filters.TEXT, get_rollno)],
-            SEM: [MessageHandler(filters.TEXT, get_semester)],
-            EXAM: [MessageHandler(filters.TEXT, get_exam)],
+            ROLLNO: [MessageHandler(filters.TEXT, rollno)],
+            SEM: [MessageHandler(filters.TEXT, semester)],
+            EXAM: [MessageHandler(filters.TEXT, exam)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
