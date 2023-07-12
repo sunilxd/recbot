@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from keep_alive import keep_alive
 
 load_dotenv()
+from replit import db
 
 from telegram.constants import ParseMode
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
@@ -21,7 +22,7 @@ from telegram.ext import (
 with open("stu_data.pkl", "rb") as f:
     student_record = pickle.load(f)
 
-TEST = False
+TEST = True
 
 
 # Enable logging
@@ -31,7 +32,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-FEEDBACK, ROLLNO, SEM, EXAM = range(4)
+FEEDBACK, ROLLNO, RESULT = range(3)
 
 async def helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """async default message"""
@@ -100,11 +101,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ask about the roll number"""
     context.user_data["entry"] = update.message.text
 
+    telegram_id = str(update.message.from_user.id)
     msg = "Roll number please"
 
-    if "roll_no" in context.user_data:
+    if telegram_id in db:
 
-        reply_keyboard = [[roll_no] for roll_no in context.user_data["roll_no"]]
+        reply_keyboard = [[roll_no] for roll_no in db[telegram_id]]
         reply_keyboard.append(['new'])
 
 
@@ -135,7 +137,7 @@ def get_response(id, email, entry):
         return get_attendance_filter(email)
     
     else:
-        return str(get_result(email))
+        return get_result_filter(email)
 
 
 async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -150,7 +152,7 @@ async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         return ROLLNO
 
-    userid = update.message.from_user.id
+    telegram_id = str(update.message.from_user.id)
     user = update.message.from_user.full_name
 
     sry_message = "I never seen that rollno in unified portal"
@@ -161,13 +163,13 @@ async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         return ConversationHandler.END
 
-    user_id, user_name, email = student_record[roll_no]
+    unified_id, user_name, email = student_record[roll_no]
     entry = context.user_data["entry"]
     
-    logger.info(f"{userid}({user}) : {roll_no}({user_name})")
+    logger.info(f"{telegram_id}({user}) : {roll_no}({user_name})")
 
     try:
-        response = get_response(user_id, email, entry)
+        response = get_response(unified_id, email, entry)
 
     except Exception as e:
         logger.error(e)
@@ -180,54 +182,52 @@ async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     
     # if first roll_no
-    if "roll_no" not in context.user_data:
-        context.user_data["roll_no"] = set([roll_no])
+    if telegram_id not in db:
+        db[telegram_id] = {roll_no:1}
 
     # not first
     else:
-        context.user_data["roll_no"].add(roll_no)
+        db[telegram_id][roll_no] = db[telegram_id].get(roll_no, 0) + 1
 
 
-    if entry == "/attendance" or entry == "/result":
+    context.user_data["data"] = response
 
-        if response == "[]":
-            response = "Result not yet realeased"
+    if isinstance(response, str):
+        return await display_result(update, context)
 
-        await update.message.reply_text(f"```{response}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
-
-        return ConversationHandler.END
+    return await pick_result(update, context)
 
 
-    context.user_data["marks"] = response
+async def pick_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Pick one result"""
 
-    reply_keyboard = [[semester] for semester in sorted(response)]
+    reply_keyboard = [[clickable] for clickable in sorted(context.user_data["data"])]
 
     await update.message.reply_text(
-        f"Got you {user_name}\n"
-        "Pick the semester",
+        "Pick one",
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, one_time_keyboard=True
         ),
     )
 
-    return SEM
+    return RESULT
 
 
-def beautify_marks(marks, start_msg=""):
-    table = f"\n{start_msg}\n"
+async def display_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Display the result"""
 
-    for mark in marks:
-        table += "{mark}: {total}\n".format(mark = mark["subject"], total = mark["total"])
+    data = "\n"+context.user_data["data"]
 
-    return table
+    await update.message.reply_text(f"```{data}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
+    return ConversationHandler.END
 
 
-async def semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Get the semester check if it is valid then ask about Exam"""
+async def filter_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Get the semester check if it is valid then ask about Exam""" 
 
-    exam = update.message.text
+    user_msg = update.message.text
 
-    if exam not in context.user_data["marks"]:
+    if user_msg not in context.user_data["data"]:
         await update.message.reply_text(
             "That is not a valid semester\n"
             "Please Try again"
@@ -235,54 +235,12 @@ async def semester(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         return ConversationHandler.END
 
-    context.user_data["marks"] = marks = context.user_data["marks"][exam]
+    context.user_data["data"] = context.user_data["data"][user_msg]
 
-    if context.user_data["entry"] == "/grades":
-        table = beautify_marks(marks)
-        await update.message.reply_text(f"```{table}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
+    if isinstance(context.user_data["data"], str):
+        return await display_result(update, context)
 
-        return ConversationHandler.END
-
-
-    reply_keyboard = [[exam] for exam in sorted(marks)]
-    reply_keyboard.append(['All'])
-
-    await update.message.reply_text(
-        "What marks do you want?",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True
-        ),
-    )
-
-    return EXAM
-
-
-async def exam(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Get the exam; if valid show the marks"""
-
-    exam = update.message.text
-    marks = context.user_data["marks"]
-
-    if exam == "All":
-        table = "\n".join([beautify_marks(marks[name], name) for name in sorted(marks)])
-        await update.message.reply_text(f"```{table}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
-
-        return ConversationHandler.END
-
-    if exam not in context.user_data["marks"]:
-        await update.message.reply_text(
-            "Sorry didn't see that exam name in database"
-        )
-
-        return ConversationHandler.END
-
-    marks = marks[exam]
-
-    table = beautify_marks(marks)
-
-    await update.message.reply_text(f"```{table}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
-
-    return ConversationHandler.END
+    return await pick_result(update, context)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -293,6 +251,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     return ConversationHandler.END
+
 
 def main() -> None:
     """Run the bot"""
@@ -314,8 +273,7 @@ def main() -> None:
         states={
             FEEDBACK: [MessageHandler(filters.TEXT, feedback)],
             ROLLNO: [MessageHandler(filters.TEXT, rollno)],
-            SEM: [MessageHandler(filters.TEXT, semester)],
-            EXAM: [MessageHandler(filters.TEXT, exam)],
+            RESULT: [MessageHandler(filters.TEXT, filter_result)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
