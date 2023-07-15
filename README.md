@@ -23,7 +23,7 @@ Therefore, the introduction of the REC bot has become necessary to fetch and vie
     - result - fetch recent results
     
 ## Usage
-To use [REC bot](http://rajalakshmi.in/UI/Modules/Login/UniLogin.aspx), simply input your roll number and select the feature you would like to use. REC bot will provide the requested data in a matter of seconds. 
+To use REC bot, simply input your roll number and select the feature you would like to use. REC bot will provide the requested data in a matter of seconds. 
 
 ## Contribution
 If you would like to contribute to REC bot, feel free to fork the repository and submit a pull request. We welcome any and all contributions to make REC bot even better!
