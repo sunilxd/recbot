@@ -19,9 +19,6 @@ from telegram.ext import (
     filters,
 )
 
-with open("stu_data.pkl", "rb") as f:
-    student_record = pickle.load(f)
-
 TEST = True
 
 
@@ -32,7 +29,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-FEEDBACK, ROLLNO, RESULT = range(3)
+FEEDBACK, ROLLNO, RESULT, REGISTER = range(4)
 
 async def helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """async default message"""
@@ -44,7 +41,8 @@ async def helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/marks - fetch internal mark\n"
         "/grades - fetch semester grades\n"
         "/attendance - fetch attendance\n"
-        "/result - fetch recent result\n\n"
+        "/result - fetch recent result\n"
+        "/add_rollno - link your rollno with bot\n\n"
         "/feedback - like to change me? give a feedback\n"
         "/about - about this project"
     )
@@ -63,7 +61,7 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "\\~\n"
         "telegram [DM](tg://user?id=1156186009)\n"
         "Insagram [sunilkumar](https://www.instagram.com/sunilkumar.0_o)\n"
-        "GitHub [sunilxd](https://github.com/sunilxd)",
+        "GitHub [sunilxd](https://github.com/sunilxd)\n",
         parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True
     )
 
@@ -96,6 +94,51 @@ async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     return ConversationHandler.END
+
+
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ask about the email"""
+
+    msg = "College email please"
+
+    await update.message.reply_text(msg)
+
+    return  REGISTER
+
+
+async def add_student(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """with the email add the student"""
+
+    email = update.message.text
+
+    try:
+        response = get_additional_role(email)
+        person_id = response["PersonId"]
+
+        info = get_personal_info(person_id)
+        name, rollno = info["Name"], info["RollNumber"]
+        char_remove = ['Mr..', 'Ms..', 'Mrs..', 'Dr..', 'MR.', 'Miss..', 'M/s.', 'Miss.']
+        for c in char_remove:
+            name = name.replace(c, '')
+        name = name.lower().strip()
+
+    except Exception as e:
+        logger.error(e)
+
+        await update.message.reply_text(
+            "Seems you are not yet added in unified portal\n\n"
+            "Try after sometime"
+        )
+
+        return ConversationHandler.END
+    
+    db["stu_data"][rollno] = (person_id, name, email)
+    msg = "{} : {}\nAdded Successfully!".format(rollno, name)
+
+    await update.message.reply_text(msg)
+
+    return ConversationHandler.END
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ask about the roll number"""
@@ -155,16 +198,18 @@ async def rollno(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     telegram_id = str(update.message.from_user.id)
     user = update.message.from_user.full_name
 
-    sry_message = "I never seen that rollno in unified portal"
+    sry_message = "Roll number missing\nTry adding your number by /add_rollno"
 
 
-    if roll_no not in student_record:
+    if roll_no not in db["stu_data"]:
         await update.message.reply_text(sry_message)
 
         return ConversationHandler.END
 
-    unified_id, user_name, email = student_record[roll_no]
+    unified_id, user_name, email = db["stu_data"][roll_no]
     entry = context.user_data["entry"]
+    context.user_data["roll_no"] = roll_no
+    context.user_data["name"] = user_name
     
     logger.info(f"{telegram_id}({user}) : {roll_no}({user_name})")
 
@@ -216,7 +261,7 @@ async def pick_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def display_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Display the result"""
 
-    data = "\n"+context.user_data["data"]
+    data = "\n"+context.user_data["data"]+"\n{}: {}\n".format(context.user_data["roll_no"], context.user_data["name"])
 
     await update.message.reply_text(f"```{data}```", parse_mode=ParseMode.MARKDOWN_V2, reply_markup=ReplyKeyboardRemove(),)
     return ConversationHandler.END
@@ -229,7 +274,7 @@ async def filter_result(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     if user_msg not in context.user_data["data"]:
         await update.message.reply_text(
-            "That is not a valid semester\n"
+            "That is not a valid pick\n"
             "Please Try again"
         )
 
@@ -268,12 +313,14 @@ def main() -> None:
             CommandHandler("result", start),
             CommandHandler("feedback", feedback_start),
             CommandHandler("about", about),
+            CommandHandler("add_rollno", register),
             MessageHandler(filters.TEXT, helper),
         ],
         states={
             FEEDBACK: [MessageHandler(filters.TEXT, feedback)],
             ROLLNO: [MessageHandler(filters.TEXT, rollno)],
             RESULT: [MessageHandler(filters.TEXT, filter_result)],
+            REGISTER: [MessageHandler(filters.TEXT, add_student)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
