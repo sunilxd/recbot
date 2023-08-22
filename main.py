@@ -5,6 +5,7 @@ from unified import *
 from dotenv import load_dotenv
 from keep_alive import keep_alive
 
+# loadenv
 load_dotenv()
 from replit import db
 
